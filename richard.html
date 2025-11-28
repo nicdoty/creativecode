@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tiny5&display=swap" rel="stylesheet">
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: #282828; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+     /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+
+  </style>
+</head>
+<body>
+
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+    <script>
+        let backgroundImg;
+        let blueCar, blackCar, whiteCar, redCar, orangeCar, greenCar;
+        let carColors = ["blue", "black", "white", "red", "orange", "green"];
+        let currentCar;
+        let carX, carY;
+        let speed = 7;
+        let score = 0;
+        let guessMade = false;
+        let buttons = [];
+        let selectedColor = null;   // <-- NEW
+        
+        function preload() {
+          backgroundImg = loadImage('richard/images/background1.png');
+          blueCar = loadImage('richard/images/blue.png');
+          blackCar = loadImage('richard/images/black.png');
+          whiteCar = loadImage('richard/images/white.png');
+          redCar = loadImage('richard/images/red.png');
+          orangeCar = loadImage('richard/images/orange.png');
+          greenCar = loadImage('richard/images/green.png');
+        }
+        
+        function setup() {
+          let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+          textFont("Tiny5");
+          textSize(24);
+          textAlign(CENTER, CENTER);
+        
+          carY = height - 300;
+        
+          setupGuessButtons();
+          pickNewCar();
+          resetCarPosition();
+        }
+        
+        function draw() {
+          background(backgroundImg);
+        
+          if (guessMade && currentCar) {
+            let carImg = {
+              blue: blueCar,
+              black: blackCar,
+              white: whiteCar,
+              red: redCar,
+              orange: orangeCar,
+              green: greenCar
+            }[currentCar];
+        
+            let carScale = 1;
+            let carWidth = carImg.width * carScale;
+            let carHeight = carImg.height * carScale;
+        
+            image(carImg, carX, carY, carWidth, carHeight);
+            carX -= speed;
+        
+            if (carX < -carWidth) {
+              guessMade = false;
+              selectedColor = null;  // <-- CLEAR SELECTION
+              pickNewCar();
+              resetCarPosition();
+              enableButtons();
+            }
+          }
+        
+          // Text
+          fill(255);
+          textSize(24);
+          text("Score: " + score, width / 2, 50);
+          textSize(18);
+          text("Guess color of the next car", width / 2, height - 160);
+        
+          for (let btn of buttons) {
+            btn.display();
+          }
+        }
+        
+        function pickNewCar() {
+          currentCar = random(carColors);
+        }
+        
+        function resetCarPosition() {
+          carX = width;
+        }
+        
+        function setupGuessButtons() {
+          let cols = 3, rows = 2;
+          let buttonWidth = 100, buttonHeight = 40;
+          let hSpacing = (width - cols * buttonWidth) / (cols + 1);
+          let vSpacing = 10;
+          let startY = height - 140;
+        
+          for (let i = 0; i < carColors.length; i++) {
+            let col = i % cols;
+            let row = floor(i / cols);
+            let x = hSpacing + col * (buttonWidth + hSpacing);
+            let y = startY + row * (buttonHeight + vSpacing);
+            buttons.push(new CanvasButton(x, y, buttonWidth, buttonHeight, carColors[i]));
+          }
+        }
+        
+        class CanvasButton {
+          constructor(x, y, w, h, label) {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.label = label;
+            this.disabled = false;
+          }
+        
+          display() {
+            // Highlight selected button, dim others
+            if (selectedColor === this.label) {
+              fill(255, 255, 150); // highlighted
+            } else if (selectedColor !== null) {
+              fill(120); // dimmed
+            } else {
+              fill(this.disabled ? 150 : 255);
+            }
+        
+            stroke(0);
+            strokeWeight(2);
+            rect(this.x, this.y, this.w, this.h, 5);
+        
+            fill(0);
+            noStroke();
+            textSize(16);
+            textFont("Tiny5");
+            text(this.label, this.x + this.w / 2, this.y + this.h / 2);
+          }
+        
+          isHovered(mx, my) {
+            return mx > this.x && mx < this.x + this.w &&
+                   my > this.y && my < this.y + this.h;
+          }
+        
+          press() {
+            if (!this.disabled && this.isHovered(mouseX, mouseY)) {
+              makeGuess(this.label);
+            }
+          }
+        }
+        
+        function mousePressed() {
+          for (let btn of buttons) {
+            btn.press();
+          }
+        }
+        
+        function makeGuess(color) {
+          if (!guessMade) {
+            guessMade = true;
+            selectedColor = color;      // <-- STORE WHICH BUTTON WAS PICKED
+            if (color === currentCar) score++;
+            disableButtons();
+          }
+        }
+        
+        function disableButtons() {
+          for (let btn of buttons) btn.disabled = true;
+        }
+        
+        function enableButtons() {
+          for (let btn of buttons) btn.disabled = false;
+        }
+        </script>
+        
+</body>
+</html>

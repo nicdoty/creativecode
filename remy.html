@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tiny5&display=swap" rel="stylesheet">
+  <script src="p5.js"></script>
+  
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+    font-family: Tiny5;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+
+      /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+<script>
+    let catImg;
+let fenceImg;
+
+let cellSize = 20;
+let gridW = 20;
+let gridH = 25;
+
+let grass = [];
+let mowCount = [];
+let brownAge = [];
+
+let catX = 200;
+let catY = 450;
+
+let moveSpeed = 2.0;
+
+let totalTime = 60;
+let startTime;
+
+let catSize = 48;
+
+let lastGX = -1;
+let lastGY = -1;
+
+let brownSpreadDelay = 60;
+let brownSpreadChance = 0.01;
+
+// game state
+let gameOver = false;
+
+// fence placement
+let fenceX = 200;
+let fenceY = 86;
+let fenceScale = 0.1;
+
+// track cat direction
+let facingLeft = false;
+
+// track remaining time
+let remaining = totalTime;
+
+function preload() {
+  catImg = loadImage("remy/images/cat.png");
+  fenceImg = loadImage("remy/images/fence.png");
+}
+
+function setup() {
+  let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+  pixelDensity(1);
+
+  for (let y = 0; y < gridH; y++) {
+    grass[y] = [];
+    mowCount[y] = [];
+    brownAge[y] = [];
+    for (let x = 0; x < gridW; x++) {
+      grass[y][x] = color(0, 200, 0);
+      mowCount[y][x] = 0;
+      brownAge[y][x] = -1;
+    }
+  }
+
+  startTime = millis();
+}
+
+function sameColor(c, r, g, b) {
+  return red(c) === r && green(c) === g && blue(c) === b;
+}
+
+function isBrownTile(gx, gy) {
+  if (gx < 0 || gx >= gridW || gy < 0 || gy >= gridH) return false;
+  let c = grass[gy][gx];
+  return sameColor(c, 139, 69, 19);
+}
+
+function collidesWithWalls(x, y) {
+  let half = catSize / 2;
+
+  let leftPx = x - half;
+  let rightPx = x + half - 1;
+  let topPx = y - half - 100;
+  let bottomPx = y + half - 1 - 100;
+
+  let left = floor(leftPx / cellSize);
+  let right = floor(rightPx / cellSize);
+  let top = floor(topPx / cellSize);
+  let bottom = floor(bottomPx / cellSize);
+
+  for (let gx = left; gx <= right; gx++) {
+    for (let gy = top; gy <= bottom; gy++) {
+      if (gx < 0 || gx >= gridW || gy >= gridH) return true;
+    }
+  }
+  return false;
+}
+
+function isCatSurroundedByBrown() {
+  let gx = floor(catX / cellSize);
+  let gy = floor((catY - 100) / cellSize);
+
+  if (gx < 0 || gx >= gridW || gy < 0 || gy >= gridH) return false;
+
+  for (let oy = -1; oy <= 1; oy++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      let nx = gx + ox;
+      let ny = gy + oy;
+
+      if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH) return false;
+
+      if (!isBrownTile(nx, ny)) return false;
+    }
+  }
+  return true;
+}
+
+function draw() {
+  background(135, 206, 235);
+
+  if (gameOver) {
+    drawWorld();
+    fill(0);
+    textSize(32);
+    textFont("Tiny5");
+    textAlign(CENTER, CENTER);
+    text("Trapped by weeds!", width / 2, height / 2);
+    return;
+  }
+
+  let nextX = catX;
+  let nextY = catY;
+
+  let curGX = floor(catX / cellSize);
+  let curGY = floor((catY - 100) / cellSize);
+
+  if (keyIsDown(LEFT_ARROW)) {
+    facingLeft = true;
+    let candidateX = catX - moveSpeed;
+    if (!collidesWithWalls(candidateX, catY)) {
+      let destGX = floor(candidateX / cellSize);
+      let destGY = floor((catY - 100) / cellSize);
+      if (!(isBrownTile(destGX, destGY) && (destGX !== curGX || destGY !== curGY))) {
+        nextX = candidateX;
+      }
+    }
+  }
+
+  if (keyIsDown(RIGHT_ARROW)) {
+    facingLeft = false;
+    let candidateX = catX + moveSpeed;
+    if (!collidesWithWalls(candidateX, catY)) {
+      let destGX = floor(candidateX / cellSize);
+      let destGY = floor((catY - 100) / cellSize);
+      if (!(isBrownTile(destGX, destGY) && (destGX !== curGX || destGY !== curGY))) {
+        nextX = candidateX;
+      }
+    }
+  }
+
+  if (keyIsDown(UP_ARROW)) {
+    let candidateY = catY - moveSpeed;
+    if (!collidesWithWalls(catX, candidateY)) {
+      let destGX = floor(catX / cellSize);
+      let destGY = floor((candidateY - 100) / cellSize);
+      if (!(isBrownTile(destGX, destGY) && (destGX !== curGX || destGY !== curGY))) {
+        nextY = candidateY;
+      }
+    }
+  }
+
+  if (keyIsDown(DOWN_ARROW)) {
+    let candidateY = catY + moveSpeed;
+    if (!collidesWithWalls(catX, candidateY)) {
+      let destGX = floor(catX / cellSize);
+      let destGY = floor((candidateY - 100) / cellSize);
+      if (!(isBrownTile(destGX, destGY) && (destGX !== curGX || destGY !== curGY))) {
+        nextY = candidateY;
+      }
+    }
+  }
+
+  catX = constrain(nextX, catSize / 2, gridW * cellSize - catSize / 2);
+  catY = constrain(nextY, catSize / 2 + 100, 100 + gridH * cellSize - catSize / 2);
+
+  let gx = floor(catX / cellSize);
+  let gy = floor((catY - 100) / cellSize);
+
+  if (gy >= 0 && gy < gridH && gx >= 0 && gx < gridW) {
+    if (gx !== lastGX || gy !== lastGY) {
+      if (mowCount[gy][gx] === 0) {
+        grass[gy][gx] = color(0, 120, 0);
+        mowCount[gy][gx] = 1;
+      } else if (mowCount[gy][gx] === 1) {
+        grass[gy][gx] = color(139, 69, 19);
+        mowCount[gy][gx] = 2;
+        brownAge[gy][gx] = 0;
+      }
+      lastGX = gx;
+      lastGY = gy;
+    }
+  }
+
+  // age brown tiles
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      if (isBrownTile(x, y)) {
+        if (brownAge[y][x] < 0) brownAge[y][x] = 0;
+        brownAge[y][x]++;
+      } else {
+        brownAge[y][x] = -1;
+      }
+    }
+  }
+
+  // spread brown
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      if (isBrownTile(x, y) && brownAge[y][x] >= brownSpreadDelay) {
+        if (random() < brownSpreadChance) {
+          let dirs = [
+            { dx: 1, dy: 0 },
+            { dx: -1, dy: 0 },
+            { dx: 0, dy: 1 },
+            { dx: 0, dy: -1 }
+          ];
+          let d = random(dirs);
+          let nx = x + d.dx;
+          let ny = y + d.dy;
+          if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
+            if (!isBrownTile(nx, ny)) {
+              grass[ny][nx] = color(139, 69, 19);
+              mowCount[ny][nx] = 2;
+              brownAge[ny][nx] = 0;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  drawWorld();
+
+  if (isCatSurroundedByBrown()) {
+    gameOver = true;
+  }
+}
+
+function drawWorld() {
+  noStroke();
+  rectMode(CORNER);
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      fill(grass[y][x]);
+      rect(x * cellSize, 100 + y * cellSize, cellSize, cellSize);
+    }
+  }
+
+  push();
+  imageMode(CENTER);
+  image(fenceImg, fenceX, fenceY, fenceImg.width * fenceScale, fenceImg.height * fenceScale);
+  pop();
+
+  push();
+  translate(catX, catY);
+  if (facingLeft) scale(-1, 1);
+  image(catImg, -catSize / 2, -catSize / 2, catSize, catSize);
+  pop();
+
+  let darkGreenCount = 0;
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      if (sameColor(grass[y][x], 0, 120, 0)) darkGreenCount++;
+    }
+  }
+  let percentMowed = floor((darkGreenCount / (gridW * gridH)) * 100);
+  if (darkGreenCount > 0 && percentMowed === 0) percentMowed = 1;
+
+  fill(255);
+  textSize(16);
+  textFont("Tiny5");
+  textAlign(LEFT, TOP);
+  text(`Mowed: ${percentMowed}%`, 10, 30);
+
+  if (!gameOver) {
+    let elapsed = floor((millis() - startTime) / 1000);
+    remaining = max(totalTime - elapsed, 0);
+  }
+  text(`Time: ${remaining}s`, 300, 30);
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tiny5&display=swap" rel="stylesheet">
+
+  <!-- p5.js and p5.sound (only once, latest stable version) -->
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/p5.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/addons/p5.sound.min.js"></script>
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+     /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+
+  </style>
+</head>
+<body>
+
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+
+<script>
+let catSit, catStand;
+let trunkImg, leavesImg, skyImg, spaceImg;
+let player;
+let platforms = [];
+let catToys = [];
+let gravity = 0.3;
+let jumpForce = -10;
+let score = 0;
+let gameOver = false;
+let onGround = false;
+let facingRight = true;
+let maxGap = 150;
+let transitionProgress = 0;
+let currentStage = 0;
+
+// Sounds
+let jumpSound, jumpLongSound, fallSound, ballSound;
+let soundOn = false;
+let waitingForStart = true;
+
+// Font
+let fontLoaded = false;
+
+function preload() {
+    catSit = loadImage("rosie/images/catSit.png");
+    catStand = loadImage("rosie/images/catStand.png");
+    trunkImg = loadImage("rosie/images/trunk.jpg");
+    leavesImg = loadImage("rosie/images/leaves.jpg");
+    skyImg = loadImage("rosie/images/sky.jpg");
+    spaceImg = loadImage("rosie/images/space.png");
+
+    // Load font
+    let link = document.createElement('link');
+    link.href = "https://fonts.googleapis.com/css2?family=Tiny5&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+}
+
+function setup() {
+  let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+
+    document.fonts.load('16px "Tiny5"').then(() => {
+        textFont('Tiny5');
+        fontLoaded = true;
+    });
+}
+
+function startGame() {
+    player = { x: width / 2, y: height - 150, vy: 0, w: 50, h: 50 };
+
+    platforms = [];
+    catToys = [];
+
+    platforms.push({ 
+        x: width / 2 - 50, 
+        y: height - 80, 
+        w: 100, 
+        h: 15, 
+        type: "normal", 
+        vanishTimer: null,
+        passed: false 
+    });
+
+    let lastY = height - 80;
+    while (lastY > -400) {
+        lastY -= random(50, maxGap);
+        let r = random();
+        let type = "normal";
+        if (r < 0.15) type = "special";
+        else if (r < 0.25) type = "boost";
+
+        platforms.push({ 
+            x: random(50, width - 100), 
+            y: lastY, 
+            w: 80, 
+            h: 15, 
+            type: type, 
+            vanishTimer: null,
+            passed: false 
+        });
+
+        if (random() < 0.1) {
+            catToys.push({
+                x: random(20, width - 20),
+                y: lastY - random(50, 150),
+                size: 12,
+                color: color(random(255), random(255), random(255)),
+                collected: false
+            });
+        }
+    }
+
+    score = 0;
+    gameOver = false;
+    transitionProgress = 0;
+    currentStage = 0;
+}
+
+function draw() {
+    background(0);
+
+    if (!fontLoaded) {
+        fill(255);
+        textSize(24);
+        textAlign(CENTER, CENTER);
+        text("Loading Font...", width / 2, height / 2);
+        return;
+    }
+
+    if (waitingForStart) {
+        fill(255);
+        textSize(24);
+        textAlign(CENTER, CENTER);
+        text("Press UP to Play", width / 2, height / 2);
+        checkStart();
+        return;
+    }
+
+    // Stage transitions
+    let targetStage = 0;
+    if (score >= 200) targetStage = 3;
+    else if (score >= 100) targetStage = 2;
+    else if (score >= 50) targetStage = 1;
+
+    if (currentStage < targetStage) {
+        transitionProgress += 0.01;
+        if (transitionProgress >= 1) {
+            transitionProgress = 0;
+            currentStage++;
+        }
+    }
+
+    let bgFrom, bgTo;
+    if (currentStage === 0) { bgFrom = trunkImg; bgTo = leavesImg; }
+    else if (currentStage === 1) { bgFrom = leavesImg; bgTo = skyImg; }
+    else if (currentStage === 2) { bgFrom = skyImg; bgTo = spaceImg; }
+    else { bgFrom = spaceImg; bgTo = spaceImg; }
+
+    push();
+    tint(255, 255 * (1 - transitionProgress));
+    image(bgFrom, 0, 0, width, height);
+    tint(255, 255 * transitionProgress);
+    image(bgTo, 0, 0, width, height);
+    noTint();
+    pop();
+
+    // Arrow key input instead of controller
+    let moveX = 0;
+    let jumpPressed = false;
+
+    if (!gameOver) {
+        if (keyIsDown(LEFT_ARROW)) moveX -= 6;
+        if (keyIsDown(RIGHT_ARROW)) moveX += 6;
+        if (keyIsDown(UP_ARROW) || keyIsDown(32)) jumpPressed = true;
+
+        if (moveX > 0) facingRight = true;
+        if (moveX < 0) facingRight = false;
+
+        player.x += moveX;
+        player.x = constrain(player.x, 0, width - player.w);
+
+        player.vy += gravity;
+        player.y += player.vy;
+        onGround = false;
+
+        for (let p of platforms) {
+            let above = player.y + player.h <= p.y + 10;
+            if (player.vy >= 0 && above && player.y + player.h > p.y &&
+                player.x + player.w > p.x && player.x < p.x + p.w) {
+
+                player.y = p.y - player.h;
+                if (p.type === "boost") {
+                    player.vy = jumpForce * 1.8;
+                    onGround = false;
+                    if (soundOn && jumpLongSound && jumpLongSound.isLoaded()) jumpLongSound.play();
+                } else {
+                    player.vy = 0;
+                    onGround = true;
+                    if (p.type === "special" && p.vanishTimer === null) p.vanishTimer = millis();
+                }
+            }
+
+            if (!p.passed && player.y < p.y - 20) {
+                p.passed = true;
+                score++;
+            }
+        }
+
+        if (onGround && jumpPressed) {
+            player.vy = jumpForce;
+            onGround = false;
+            if (soundOn && jumpSound && jumpSound.isLoaded()) jumpSound.play();
+        }
+
+        for (let i = platforms.length - 1; i >= 0; i--) {
+            let p = platforms[i];
+            if (p.type === "special" && p.vanishTimer && millis() - p.vanishTimer > 200)
+                platforms.splice(i, 1);
+        }
+
+        for (let toy of catToys) {
+            if (!toy.collected && player.x + player.w > toy.x && player.x < toy.x + toy.size &&
+                player.y + player.h > toy.y && player.y < toy.y + toy.size) {
+
+                toy.collected = true;
+                score += 5;
+
+                if (soundOn && ballSound && ballSound.isLoaded()) ballSound.play();
+            }
+        }
+
+        let scroll = 0;
+        if (player.y < height / 2) {
+            scroll = height / 2 - player.y;
+            player.y = height / 2;
+        }
+
+        for (let p of platforms) p.y += scroll;
+        for (let toy of catToys) if (!toy.collected) toy.y += scroll;
+
+        let topY = min(...platforms.map(pl => pl.y));
+        while (topY > -400) {
+            let r = random();
+            let type = "normal";
+            if (r < 0.15) type = "special";
+            else if (r < 0.25) type = "boost";
+
+            let newPlatform = {
+                x: random(50, width - 100),
+                y: topY - random(50, maxGap),
+                w: 80,
+                h: 15,
+                type: type,
+                vanishTimer: null,
+                passed: false
+            };
+            platforms.push(newPlatform);
+
+            if (random() < 0.1) {
+                catToys.push({
+                    x: random(20, width - 20),
+                    y: newPlatform.y - random(50, 150),
+                    size: 12,
+                    color: color(random(255), random(255), random(255)),
+                    collected: false
+                });
+            }
+
+            topY = newPlatform.y;
+        }
+
+        platforms = platforms.filter(p => p.y < height + 100);
+        catToys = catToys.filter(t => t.y < height + 100 && !t.collected);
+
+        if (player.y > height + 50) {
+            gameOver = true;
+            if (soundOn && fallSound && fallSound.isLoaded()) fallSound.play();
+        }
+
+        drawScene();
+    } else {
+        drawGameOver();
+    }
+}
+
+function drawScene() {
+    // Draw platforms
+    for (let p of platforms) {
+        if (p.type === "special") fill(255, 194, 57);
+        else if (p.type === "boost") fill(0, 0, 150);
+        else fill(120, 80, 40);
+        rect(p.x, p.y, p.w, p.h, 5);
+    }
+
+    // Draw toys
+    for (let toy of catToys) {
+        if (!toy.collected) {
+            fill(toy.color);
+            ellipse(toy.x + toy.size/2, toy.y + toy.size/2, toy.size);
+        }
+    }
+
+    // Draw cat
+    let img = onGround ? catSit : catStand;
+    push();
+    translate(player.x + player.w / 2, player.y);
+    if (!facingRight) scale(-1,1);
+    imageMode(CENTER);
+    image(img, 0, player.h/2, player.w, player.h);
+    pop();
+
+    // Draw score
+    noStroke();
+    fill(255);
+    textAlign(CENTER, CENTER);
+    textSize(20);
+    text("Score: " + score, width/2, 30);
+}
+
+function drawGameOver() {
+    noStroke();
+    fill(255);
+    textAlign(CENTER, CENTER);
+    textSize(20);
+    text("Game Over!", width/2, height/2 - 20);
+    text("Score: " + score, width/2, height/2 + 20);
+    text("Press UP to restart", width/2, height/2 + 60);
+
+    if (keyIsDown(UP_ARROW) || keyIsDown(32)) startGame();
+}
+
+function checkStart() {
+    let startPressed = keyIsDown(UP_ARROW) || keyIsDown(32);
+    if (startPressed) {
+        if (getAudioContext().state !== 'running') getAudioContext().resume();
+
+        if (!soundOn) {
+            jumpSound = loadSound("rosie/images/jump.mp3");
+            jumpLongSound = loadSound("rosie/images/longJump.mp3");
+            fallSound = loadSound("rosie/images/fall.mp3");
+            ballSound = loadSound("rosie/images/ball.mp3");
+        }
+
+        soundOn = true;
+        waitingForStart = false;
+        startGame();
+    }
+}
+
+</script>
+</body>
+</html>
