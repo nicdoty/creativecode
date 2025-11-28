@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Stack+Sans+Notch:wght@200..700&display=swap" rel="stylesheet">
+  <title>Carousel</title>
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: #282828; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh; 
+    }
+    canvas { 
+      display: block; 
+      background: black; 
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="carouselCanvas"></canvas>
+  <script>
+    let canvas = document.getElementById("carouselCanvas");
+    let ctx = canvas.getContext("2d");
+
+
+canvas.width = 400;
+canvas.height = 600;
+let width = canvas.width;
+let height = canvas.height;
+
+// -------------------------
+// GLOBAL STATE
+// -------------------------
+let currentScene = "carousel";
+
+let numSlides = 12;
+let radius = 160;
+let pokeOut = 40;
+let topWidth = 50;
+let bottomWidth = 30;
+let slideHeight = 80;
+let angleOffset = 0;
+let targetAngleOffset = 0; 
+let spinSpeed = 0.05; 
+let easing = 0.1; 
+
+let slideLabels = [
+  "DEANNA","DONNA","MICHAEL","IVAN","OLIVER","DERRICK",
+  "GABRIELLA","PAULA","ROSIE","BREANNE","RICHARD","REMY"
+];
+
+let slideGames = [
+  "deanna","donna","michael","ivan","oliver","derrick",
+  "gabriella","paula","rosie","breanne","richard","remy"
+];
+
+let gameName = [
+  "Deanna's Landfill","Donna's Knitting","Michael's Crafts","Ivan's Camera",
+  "Oliver!","Derrick's Hockey Game","Gabriella's Shopping Spree","Paula's Vacation",
+  "Rosie's Climb","Breanne's Day","Richard's Lunch Break","Mowing Remy"
+];
+
+// -------------------------
+// MOUSE STATE
+// -------------------------
+let mouseX = 0, mouseY = 0;
+canvas.addEventListener("mousemove", (e) => {
+  mouseX = e.clientX - (window.innerWidth/2 - width/2);
+  mouseY = e.clientY - (window.innerHeight/2 - height/2);
+});
+
+canvas.addEventListener("click", () => {
+  let topIndex = getTopSlideIndex();
+  let slide = getTopSlideIndex();
+  if (isMouseOverTop()) {
+    let game = slideGames[topIndex];
+    if (game) window.location.href = game + ".html";
+  }
+});
+
+// -------------------------
+// UTILITY FUNCTIONS
+// -------------------------
+function lerp(a,b,t) { return a + (b-a)*t; }
+
+function lerpColor(c1,c2,t) {
+  return [
+    lerp(c1[0], c2[0], t),
+    lerp(c1[1], c2[1], t),
+    lerp(c1[2], c2[2], t)
+  ];
+}
+
+function getColorForAngle(a) {
+  let t = (a % (2*Math.PI)) / (2*Math.PI);
+  if (t < 0) t += 1;
+  if (t < 0.33) return lerpColor([10,30,120],[200,40,40], t/0.33);
+  else if (t < 0.66) return lerpColor([200,40,40],[255,245,220], (t-0.33)/0.33);
+  else return lerpColor([255,245,220],[10,30,120], (t-0.66)/0.34);
+}
+
+function getTopSlideIndex() {
+  let angleStep = 2*Math.PI / numSlides;
+  let topAngle = -Math.PI/2;
+  let closestIndex = 0;
+  let smallestDiff = Infinity;
+  for (let i=0; i<numSlides; i++) {
+    let angle = i*angleStep + angleOffset;
+    let diff = Math.abs((angle - topAngle + 2*Math.PI) % (2*Math.PI));
+    if (diff > Math.PI) diff = 2*Math.PI - diff;
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      closestIndex = i;
+    }
+  }
+  return closestIndex;
+}
+
+function isMouseOverTop() {
+  let topIndex = getTopSlideIndex();
+  let angleStep = 2*Math.PI / numSlides;
+  let angle = topIndex*angleStep + angleOffset;
+  let yOffset = -pokeOut;
+
+  let x = Math.cos(angle)*radius;
+  let y = Math.sin(angle)*radius + yOffset;
+
+  let dx = mouseX - (width/2 + x);
+  let dy = mouseY - (height/2 + y);
+
+  let cosA = Math.cos(-(angle + Math.PI/2));
+  let sinA = Math.sin(-(angle + Math.PI/2));
+  let localX = dx * cosA - dy * sinA;
+  let localY = dx * sinA + dy * cosA;
+
+  if (localY >= 0 && localY <= slideHeight) {
+    let wAtY = lerp(topWidth, bottomWidth, localY/slideHeight);
+    if (localX >= -wAtY/2 && localX <= wAtY/2) return true;
+  }
+  return false;
+}
+
+// -------------------------
+// CAROUSEL DRAW
+// -------------------------
+function drawCarousel() {
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.translate(width/2, height/2);
+
+  let angleStep = 2*Math.PI / numSlides;
+  let topIndex = getTopSlideIndex();
+
+  for (let i=0; i<numSlides; i++) {
+    let angle = i*angleStep + angleOffset;
+    let yOffset = (i===topIndex) ? -pokeOut : 0;
+    let x = Math.cos(angle)*radius;
+    let y = Math.sin(angle)*radius + yOffset;
+
+    let c1 = getColorForAngle(angle);
+    let c2 = getColorForAngle(angle + angleStep);
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle + Math.PI/2);
+
+    let isHover = (i===topIndex && isMouseOverTop());
+
+    let steps = 40;
+    for (let t=0; t<1; t += 1/steps) {
+      let c = lerpColor(c1, c2, t);
+      if (isHover) c = lerpColor(c, [255,255,0], 0.5);
+
+      let r = Math.round(c[0]), g = Math.round(c[1]), b = Math.round(c[2]);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+      let yTop = lerp(0, slideHeight, t);
+      let yBot = lerp(0, slideHeight, t+1/steps);
+      let wTop = lerp(topWidth, bottomWidth, t);
+      let wBot = lerp(topWidth, bottomWidth, t+1/steps);
+
+      ctx.beginPath();
+      ctx.moveTo(-wTop/2, yTop);
+      ctx.lineTo(wTop/2, yTop);
+      ctx.lineTo(wBot/2, yBot);
+      ctx.lineTo(-wBot/2, yBot);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // -------------------------
+  // Draw labels
+  // -------------------------
+  ctx.font = "50px Stack Sans Notch";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(slideLabels[topIndex], 20, height-20);
+
+  ctx.save();
+  ctx.font = "15px Stack Sans Notch";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "top";
+  ctx.translate(width-390, 10);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(gameName[topIndex].toUpperCase(), 0, 0);
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = "white";
+  ctx.font = "20px Stack Sans Notch";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "top";
+  ctx.fillText("CHOOSE A", width - 14, 10);
+
+  ctx.save();
+  ctx.translate(width - 10, 36);
+  ctx.rotate(Math.PI / 2);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("GAME!", 0, 0);
+  ctx.restore();
+  ctx.restore();
+}
+
+// -------------------------
+// KEYBOARD HANDLING
+// -------------------------
+let keys = { left: false, right: false };
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft") keys.left = true;
+  if (e.key === "ArrowRight") keys.right = true;
+  if (e.key === "Enter") {
+    if (isMouseOverTop()) {
+      let topIndex = getTopSlideIndex();
+      let game = slideGames[topIndex];
+      if (game) window.location.href = game + ".html";
+    }
+  }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.key === "ArrowLeft") keys.left = false;
+  if (e.key === "ArrowRight") keys.right = false;
+});
+
+// -------------------------
+// MAIN LOOP
+// -------------------------
+function animate() {
+  if (keys.left) targetAngleOffset -= spinSpeed;
+  if (keys.right) targetAngleOffset += spinSpeed;
+
+  angleOffset = lerp(angleOffset, targetAngleOffset, easing);
+
+  if (currentScene === "carousel") drawCarousel();
+  requestAnimationFrame(animate);
+}
+animate();
+
+
+  </script>
+</body>
+</html>

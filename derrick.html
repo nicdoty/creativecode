@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="p5.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tiny5&display=swap" rel="stylesheet">
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+    
+
+      /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+
+
+<script>
+let netImg, puckImg, targetImg;
+let pucks = [];
+let currentPuck;
+let target = null;
+let power = 0;
+let powerIncreasing = true;
+let score = 0;
+let shotInProgress = false;
+
+// Max display sizes
+let puckStartSize = 100;
+let puckMinSize = 30;
+let netMaxW = 400, netMaxH = 500;
+let targetMaxSize = 50;
+
+// Net position & size
+let netX, netY, netW, netH;
+let gravity = 0.3; // lower gravity for higher arcs
+
+function preload() {
+netImg = loadImage('derrick/images/net.png');
+puckImg = loadImage('derrick/images/puck.png');
+targetImg = loadImage('derrick/images/target.png');
+}
+
+function setup() {
+  let canvas = createCanvas(400, 600); // store canvas element
+canvas.parent('game-container');
+canvas.style('display', 'block'); // ensure it's visible
+
+currentPuck = new Puck(width / 2, height - 50);
+spawnTarget();
+
+// Calculate net display size
+let netRatio = netImg.width / netImg.height;
+if (netMaxW / netMaxH > netRatio) {
+netH = netMaxH;
+netW = netH * netRatio;
+} else {
+netW = netMaxW;
+netH = netW / netRatio;
+}
+netX = width / 2;
+netY = height / 3;
+}
+
+function draw() {
+background(0);
+imageMode(CENTER);
+
+// Draw net
+image(netImg, netX, netY, netW, netH);
+
+// Display target
+if (target) target.show();
+
+// Draw aiming arrow if not shooting
+if (!shotInProgress) drawAimingArrow();
+
+// Power bar
+fill(255);
+rect(10, height - 30, 20, -100);
+fill(255, 0, 0);
+let barHeight = map(power, 0, 100, 0, 100);
+rect(10, height - 30, 20, -barHeight);
+
+// Update power
+if (!shotInProgress) {
+if (powerIncreasing) {
+power += 1;
+if (power >= 100) powerIncreasing = false;
+} else {
+power -= 1;
+if (power <= 0) powerIncreasing = true;
+}
+}
+
+// Update all pucks
+for (let p of pucks) {
+p.update();
+p.show();
+}
+
+// Show current puck
+currentPuck.show();
+
+// Display score
+fill(255);
+textSize(20);
+textFont("Tiny5");
+text('Score: ' + score, width - 100, 30);
+}
+
+function drawAimingArrow() {
+push();
+stroke(255, 255, 0);
+strokeWeight(3);
+fill(255, 255, 0);
+let angle = atan2(mouseY - currentPuck.y, mouseX - currentPuck.x);
+let arrowLength = 50 + power;
+let endX = currentPuck.x + cos(angle) * arrowLength;
+let endY = currentPuck.y + sin(angle) * arrowLength;
+line(currentPuck.x, currentPuck.y, endX, endY);
+push();
+translate(endX, endY);
+rotate(angle);
+triangle(0, 0, -10, 5, -10, -5);
+pop();
+pop();
+}
+
+function mousePressed() {
+if (!shotInProgress) {
+let dx = mouseX - currentPuck.x;
+let dy = mouseY - currentPuck.y;
+
+
+// Increased max speed for higher shots
+let speed = map(power, 0, 100, 5, 25);
+
+let angle = atan2(dy, dx);
+
+currentPuck.vx = cos(angle) * speed;
+currentPuck.vy = sin(angle) * speed;
+
+shotInProgress = true;
+power = 0;
+pucks.push(currentPuck);
+currentPuck = new Puck(width / 2, height - 50);
+
+
+}
+}
+
+function spawnTarget() {
+if (!target) {
+let x = random(width / 2 - 80, width / 2 + 80);
+let y = random(height / 3 - 50, height / 3 + 50);
+target = new Target(x, y);
+}
+}
+
+class Puck {
+constructor(x, y) {
+this.x = x;
+this.y = y;
+this.vx = 0;
+this.vy = 0;
+this.size = puckStartSize;
+}
+
+update() {
+this.x += this.vx;
+this.y += this.vy;
+this.vy += gravity;
+
+
+// Shrink based on distance to net
+let distToNet = dist(this.x, this.y, netX, netY);
+this.size = map(distToNet, height, 0, puckStartSize, puckMinSize);
+this.size = max(this.size, puckMinSize);
+
+// Check target collision
+if (target && dist(this.x, this.y, target.x, target.y) < 20) {
+  score++;
+  target = null;
+  spawnTarget();
+}
+
+// Remove puck if it flies off screen
+if (this.y > height + 50 || this.x < -50 || this.x > width + 50) {
+  shotInProgress = false;
+}
+
+
+}
+
+show() {
+let ratio = puckImg.width / puckImg.height;
+let w = this.size;
+let h = this.size / ratio;
+image(puckImg, this.x, this.y, w, h);
+}
+}
+
+class Target {
+constructor(x, y) {
+this.x = x;
+this.y = y;
+}
+
+show() {
+let ratio = targetImg.width / targetImg.height;
+let w = targetMaxSize;
+let h = targetMaxSize / ratio;
+image(targetImg, this.x, this.y, w, h);
+}
+}
+
+</script>
+</body>
+</html>

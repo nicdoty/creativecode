@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Gab Game</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+<style>
+  body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+  canvas {
+    image-rendering: pixelated;
+    display: block;
+    background: #282828;
+  }
+
+
+      /* Container for canvas and button */
+      #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tiny5&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+<script>
+let gabImg, bagImg;
+const GAB_SCALE = 0.01;
+const BAG_SCALE = 0.01;
+
+let gab = {x: 0, y: 0};
+let gabW = 0, gabH = 0, bagW = 0, bagH = 0;
+let bags = [];
+let moneyPopups = [];
+let score = 0;
+let timeLeft = 30;
+let gameOver = false;
+let gameStarted = false;
+
+let KEY = {LEFT: false, RIGHT: false, UP: false, DOWN: false};
+
+function preload() {
+  gabImg = loadImage("gab/images/gab.png");
+  bagImg = loadImage("gab/images/bag.png");
+}
+
+function setup() {
+  let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+  gabW = gabImg.width * GAB_SCALE;
+  gabH = gabImg.height * GAB_SCALE;
+  bagW = bagImg.width * BAG_SCALE;
+  bagH = bagImg.height * BAG_SCALE;
+
+  startNewGame();
+}
+
+function draw() {
+  background(0);
+
+  handleMovement();
+  handleCollisions();
+  drawBags();
+  drawGab();
+  drawMoneyPopups();
+  drawUI();
+}
+
+function keyPressed() {
+  if (!gameStarted && !gameOver) { gameStarted = true; return; }
+  if (gameOver) { startNewGame(); return; }
+
+  if (keyCode === LEFT_ARROW) KEY.LEFT = true;
+  if (keyCode === RIGHT_ARROW) KEY.RIGHT = true;
+  if (keyCode === UP_ARROW) KEY.UP = true;
+  if (keyCode === DOWN_ARROW) KEY.DOWN = true;
+}
+
+function keyReleased() {
+  if (keyCode === LEFT_ARROW) KEY.LEFT = false;
+  if (keyCode === RIGHT_ARROW) KEY.RIGHT = false;
+  if (keyCode === UP_ARROW) KEY.UP = false;
+  if (keyCode === DOWN_ARROW) KEY.DOWN = false;
+}
+
+// -------------------
+// Game functions
+// -------------------
+function randomRange(min, max) { return random(min, max); }
+
+function startNewGame() {
+  score = 0;
+  timeLeft = 30;
+  gameOver = false;
+  gameStarted = false;
+
+  gab = {x: width/2 - gabW/2, y: height/2 - gabH/2};
+  bags = [];
+  moneyPopups = [];
+
+  for (let i = 0; i < floor(randomRange(4,6)); i++) spawnBag();
+
+  setInterval(() => {
+    if (gameStarted && !gameOver) {
+      timeLeft--;
+      if (timeLeft <= 0) gameOver = true;
+    }
+  }, 1000);
+}
+
+function spawnBag() {
+  let attempts = 0;
+  while(attempts < 1000) {
+    let x = randomRange(20, width - bagW);
+    let y = randomRange(60, height - bagH);
+    let overlap = bags.some(b => dist(x+bagW/2, y+bagH/2, b.x+bagW/2, b.y+bagH/2) < (bagW+bagH)/2);
+    if (!overlap) {
+      bags.push({x,y});
+      return;
+    }
+    attempts++;
+  }
+}
+
+// -------------------
+// Movement & collisions
+// -------------------
+function handleMovement() {
+  if (gameOver || !gameStarted) return;
+  let speed = 4;
+  if (KEY.LEFT) gab.x -= speed;
+  if (KEY.RIGHT) gab.x += speed;
+  if (KEY.UP) gab.y -= speed;
+  if (KEY.DOWN) gab.y += speed;
+
+  gab.x = constrain(gab.x, 0, width - gabW);
+  gab.y = constrain(gab.y, 50, height - gabH);
+}
+
+function handleCollisions() {
+  if (!gameStarted) return;
+  for (let i = bags.length-1; i >= 0; i--) {
+    let b = bags[i];
+    if (dist(gab.x+gabW/2, gab.y+gabH/2, b.x+bagW/2, b.y+bagH/2) < (gabW+bagW)/2 * 0.7) {
+      let money = -floor(randomRange(20,1001));
+      score += money;
+      moneyPopups.push({x:b.x+bagW/2, y:b.y, amount:money, timer:0.5, color:[255,0,0]});
+      bags.splice(i,1);
+      spawnBag();
+    }
+  }
+}
+
+// -------------------
+// Draw
+// -------------------
+function drawBags() {
+  for (let b of bags) {
+    image(bagImg, b.x, b.y, bagW, bagH);
+  }
+}
+
+function drawGab() {
+  image(gabImg, gab.x, gab.y, gabW, gabH);
+}
+
+function drawMoneyPopups() {
+  textFont("Tiny5");
+  textAlign(CENTER, CENTER);
+  textSize(20);
+  for (let i = moneyPopups.length-1; i >= 0; i--) {
+    let p = moneyPopups[i];
+    fill(p.color[0], p.color[1], p.color[2]);
+    text(`$${p.amount}`, p.x, p.y);
+    p.y -= 1;
+    p.timer -= 1/60;
+    if (p.timer <= 0) moneyPopups.splice(i,1);
+  }
+}
+
+function drawUI() {
+  fill(255);
+  textSize(24);
+  textAlign(LEFT);
+  text(`Score: $${score}`, 20,30);
+  textAlign(RIGHT);
+  text(`Time: ${timeLeft}s`, width-20,30);
+
+  if (!gameStarted && !gameOver) {
+    fill(0,0,0,180);
+    rect(0,0,width,height);
+    fill(255);
+    textSize(32);
+    textAlign(CENTER, CENTER);
+    text("Press any key to start", width/2, height/2);
+  }
+
+  if (gameOver) {
+    fill(0,0,0,200);
+    rect(0,0,width,height);
+    fill(255);
+    textSize(32);
+    textAlign(CENTER, CENTER);
+    text(`Game Over\nFinal Score: $${score}`, width/2, height/2);
+  }
+}
+</script>
+
+</body>
+</html>

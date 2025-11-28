@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="p5.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+
+      /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+
+<script>
+    let Engine = Matter.Engine,
+World = Matter.World,
+Bodies = Matter.Bodies,
+Composite = Matter.Composite,
+Mouse = Matter.Mouse,
+MouseConstraint = Matter.MouseConstraint,
+Runner = Matter.Runner;
+
+let engine, world, runner;
+let boxes = [];
+let images = [];
+let img1, img2, img3, img4, img5, img6, img7, img8, img9, img10;
+let img11, img12, img13, img14, img15, img16, img17, img18, img19, img20, img21, img22, img23, img24, img25;
+
+function preload() {
+img1 = loadImage("deanna/images/object1.png");
+img2 = loadImage("deanna/images/object2.png");
+img3 = loadImage("deanna/images/object3.png");
+img4 = loadImage("deanna/images/object4.png");
+img5 = loadImage("deanna/images/object5.png");
+img6 = loadImage("deanna/images/object6.png");
+img7 = loadImage("deanna/images/object7.png");
+img8 = loadImage("deanna/images/object8.png");
+img9 = loadImage("deanna/images/object9.png");
+img10 = loadImage("deanna/images/object10.png");
+
+img11 = loadImage("deanna/images/object11.png");
+img12 = loadImage("deanna/images/object12.png");
+img13 = loadImage("deanna/images/object13.png");
+img14 = loadImage("deanna/images/object14.png");
+img15 = loadImage("deanna/images/object15.png");
+img16 = loadImage("deanna/images/object16.png");
+img17 = loadImage("deanna/images/object17.png");
+img18 = loadImage("deanna/images/object18.png");
+img19 = loadImage("deanna/images/object19.png");
+img20 = loadImage("deanna/images/object20.png");
+img21 = loadImage("deanna/images/object21.png");
+img22 = loadImage("deanna/images/object22.png");
+img23 = loadImage("deanna/images/object23.png");
+img24 = loadImage("deanna/images/object24.png");
+img25 = loadImage("deanna/images/object25.png");
+
+images = [img1,img2,img3,img4,img5,img6,img7,img8,img9,img10,
+img11,img12,img13,img14,img15,img16,img17,img18,img19,img20,img21,img22, img23, img24, img25];
+}
+
+function setup() {
+let canvas = createCanvas(400, 600); // store canvas element
+canvas.parent('game-container');
+canvas.style('display', 'block'); // ensure it's visible
+
+engine = Engine.create();
+world = engine.world;
+
+// Walls
+let walls = [
+Bodies.rectangle(200, 0, 400, 50, { isStatic: true }),
+Bodies.rectangle(200, 600, 400, 50, { isStatic: true }),
+Bodies.rectangle(0, 300, 50, 600, { isStatic: true }),
+Bodies.rectangle(400, 300, 50, 600, { isStatic: true })
+];
+Composite.add(world, walls);
+
+// Desired widths for each image; height calculated for aspect ratio
+let targetWidths = [
+70, 50, 20, 40, 60, 60, 80, 50, 30, 40,
+30, 40, 40, 60, 50, 30, 120, 50, 120, 40,
+80, 50, 70, 70, 40
+];
+
+for (let i = 0; i < images.length; i++) {
+let img = images[i];
+let w = targetWidths[i];
+let h = w * (img.height / img.width);
+
+
+let body = Bodies.rectangle(random(50, 350), random(50, 550), w, h, {
+  restitution: 0.4,
+  friction: 0.1,
+  frictionAir: 0.02
+});
+body.img = img;
+body.w = w;
+body.h = h;
+boxes.push(body);
+Composite.add(world, body);
+
+
+}
+
+// Correct Mouse.create by passing the canvas element directly
+let canvasMouse = Mouse.create(canvas.elt);
+canvasMouse.pixelRatio = pixelDensity();
+let mouseParams = {
+mouse: canvasMouse,
+constraint: { stiffness: 0.2, angularStiffness: 0.2, render: { visible: false } }
+};
+let mConstraint = MouseConstraint.create(engine, mouseParams);
+Composite.add(world, mConstraint);
+
+// Use Matter.Runner instead of Engine.run
+runner = Runner.create();
+Runner.run(runner, engine);
+}
+
+function draw() {
+background(0);
+
+for (let b of boxes) {
+push();
+translate(b.position.x, b.position.y);
+rotate(b.angle);
+imageMode(CENTER);
+image(b.img, 0, 0, b.w, b.h);
+pop();
+}
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="p5.js"></script>
+    <title>p5.js Sketch</title>
+    <style>
+ body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+       /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+    </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+  
+    
+
+<script>
+    let cameraImg;
+let flashImg;
+let items = [];
+let numItems = 7;
+
+let cameraScale = 0.1;
+let itemScale = 0.1;
+let flashScale = 0.1;
+let canvasMargin = 20;
+
+// Camera box
+let cameraX, cameraY, cameraWidth, cameraHeight;
+
+// Dragging variables
+let draggingItem = null;
+let offsetX = 0;
+let offsetY = 0;
+
+// Gravity
+let gravity = 5; // pixels per frame
+
+// Photobooth variables
+let allPlaced = false;
+let countdown = 5; // 5-second countdown
+let countdownStartTime = 0;
+let capturing = false;
+let captureInterval = 1000; // 1 second between photos
+let photos = [];
+let photoCount = 0;
+let totalPhotos = 4;
+
+// Flash effect variables
+let flashScreen = false;
+let flashStartTime = 0;
+let flashDuration = 200; // milliseconds
+
+let video;
+let showPhotos = false;
+
+function preload() {
+  cameraImg = loadImage('ivan/images/camera2.png');
+  flashImg = loadImage('ivan/images/flash.png'); 
+  for (let i = 1; i <= numItems; i++) {
+    items.push({
+      img: loadImage(`ivan/images/item${i}.png`),
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      placed: false,
+      falling: false,
+      inFront: false
+    });
+  }
+}
+
+function setup() {
+  let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+  imageMode(CENTER);
+
+  // Camera position and size
+  cameraX = width / 2;
+  cameraY = -20 + height / 2;
+  cameraWidth = cameraImg.width * cameraScale;
+  cameraHeight = cameraImg.height * cameraScale;
+
+  // Webcam capture
+  video = createCapture(VIDEO);
+  video.size(160, 120);
+  video.hide();
+
+  // Randomly place items below camera safely
+  let minItemY = cameraY + cameraHeight / 2 + 50;
+  let placedItems = [];
+
+  for (let item of items) {
+    let w = item.img.width * itemScale;
+    let h = item.img.height * itemScale;
+    item.width = w;
+    item.height = h;
+
+    let safe = false;
+    let attempts = 0;
+    const maxAttempts = 1000;
+
+    while (!safe && attempts < maxAttempts) {
+      attempts++;
+      let x = random(canvasMargin + w / 2, width - canvasMargin - w / 2);
+      let y = random(minItemY + h / 2, height - canvasMargin - h / 2);
+      safe = true;
+      for (let pos of placedItems) {
+        let dx = x - pos.x;
+        let dy = y - pos.y;
+        if (sqrt(dx * dx + dy * dy) < (w + pos.width) / 2) {
+          safe = false;
+          break;
+        }
+      }
+      if (safe) {
+        item.x = x;
+        item.y = y;
+        placedItems.push({x, y, width: w, height: h});
+      }
+    }
+
+    if (!safe) {
+      item.x = canvasMargin + w / 2;
+      item.y = minItemY + h / 2;
+      placedItems.push({x: item.x, y: item.y, width: w, height: h});
+      console.warn("Could not place item safely, using fallback position");
+    }
+  }
+}
+
+function draw() {
+  background(0);
+
+  // Draw items behind camera
+  for (let item of items) {
+    if (!item.placed && !item.inFront) {
+      if (item.falling) {
+        item.y += gravity;
+        if (item.y > cameraY - cameraHeight / 2) {
+          item.y = cameraY;
+          item.x = cameraX;
+          item.placed = true;
+          item.falling = false;
+        }
+      }
+      image(item.img, item.x, item.y, item.width, item.height);
+    }
+  }
+
+  // Draw camera
+  image(cameraImg, cameraX, cameraY, cameraWidth, cameraHeight);
+
+  // Draw items in front of camera
+  for (let item of items) {
+    if (item.inFront) {
+      image(item.img, item.x, item.y, item.width, item.height);
+    }
+  }
+
+  // Check if all items placed
+  if (!allPlaced) {
+    allPlaced = items.every(item => item.placed);
+    if (allPlaced) {
+      countdownStartTime = millis();
+      capturing = true;
+    }
+  }
+
+  // Show flash above camera before countdown
+  if (allPlaced && !capturing) {
+    let flashWidth = flashImg.width * flashScale;
+    let flashHeight = flashImg.height * flashScale;
+    image(flashImg, cameraX, cameraY - cameraHeight / 2 - flashHeight / 2, flashWidth, flashHeight);
+  }
+
+  // Countdown and photo capture
+  if (capturing) {
+    let elapsed = floor((millis() - countdownStartTime) / 1000);
+    let remaining = countdown - elapsed;
+
+    if (remaining > 0) {
+      fill(255);
+      textSize(64);
+      textAlign(CENTER, CENTER);
+      text(remaining, width / 2, height / 2);
+    } else {
+      // Take photo at intervals
+      if (photoCount < totalPhotos) {
+        if (millis() - countdownStartTime >= countdown * 1000 + photoCount * captureInterval) {
+          let snap = video.get();
+          photos.push(snap);
+          photoCount++;
+
+          // Trigger white screen flash
+          flashScreen = true;
+          flashStartTime = millis();
+        }
+      } else {
+        showPhotos = true; // All photos taken
+      }
+    }
+  }
+
+  // Draw white flash overlay if triggered
+  if (flashScreen) {
+    fill(255, 255, 255, 200); // semi-transparent white
+    rect(0, 0, width, height);
+    if (millis() - flashStartTime > flashDuration) {
+      flashScreen = false;
+    }
+  }
+
+  // Draw vertical film strip overlay after all photos captured
+  if (showPhotos) {
+    let photoWidth = 150;  // bigger photos
+    let photoHeight = 110;
+    let spacing = 20;
+
+    let stripWidth = photoWidth;
+    let stripHeight = photos.length * photoHeight + (photos.length - 1) * spacing;
+    let stripX = width / 2;
+    let stripY = height / 2 - stripHeight / 2;
+
+    // White rectangle border around all photos
+    fill(255);
+    rectMode(CENTER);
+    rect(stripX, stripY + stripHeight / 2, stripWidth + 20, stripHeight + 20);
+
+    // Draw photos vertically centered
+    for (let i = 0; i < photos.length; i++) {
+      let y = stripY + i * (photoHeight + spacing) + photoHeight / 2;
+      image(photos[i], stripX, y, photoWidth, photoHeight);
+    }
+  }
+}
+
+function mousePressed() {
+  for (let item of items) {
+    if (!item.placed &&
+        mouseX > item.x - item.width/2 &&
+        mouseX < item.x + item.width/2 &&
+        mouseY > item.y - item.height/2 &&
+        mouseY < item.y + item.height/2) {
+      draggingItem = item;
+      offsetX = mouseX - item.x;
+      offsetY = mouseY - item.y;
+      item.inFront = true;
+      break;
+    }
+  }
+}
+
+function mouseDragged() {
+  if (draggingItem) {
+    draggingItem.x = mouseX - offsetX;
+    draggingItem.y = mouseY - offsetY;
+  }
+}
+
+function mouseReleased() {
+  if (draggingItem) {
+    if (draggingItem.y + draggingItem.height/2 < cameraY - cameraHeight/2) {
+      draggingItem.falling = true;
+      draggingItem.inFront = false;
+    }
+    draggingItem = null;
+  }
+}
+
+</script>
+</body>
+</html>

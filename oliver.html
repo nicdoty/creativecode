@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="p5.js"></script>
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+      /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+    
+<script>
+let img;
+let points = [];
+let angleX = 0;
+let angleY = 0;
+let lastMouseX, lastMouseY;
+let dragging = false;
+
+function preload() {
+  img = loadImage('oliver/images/oliver3.PNG'); 
+}
+
+function setup() {
+let canvas = createCanvas(400, 600, WEBGL);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+  img.loadPixels();
+  img.resize(400, 0);
+
+  let spacing = 3; // Dense grid for more detail
+  for (let y = 0; y < img.height; y += spacing) {
+    for (let x = 0; x < img.width; x += spacing) {
+      let i = (y * img.width + x) * 4;
+      let r = img.pixels[i];
+      let g = img.pixels[i + 1];
+      let b = img.pixels[i + 2];
+      let a = img.pixels[i + 3];
+
+      if (a > 10) { // Keep almost all visible pixels
+        let brightness = (r + g + b) / 3;
+        let z = map(255 - brightness, 0, 255, -100, 100); // Bigger Z range for more depth
+        points.push({
+          x: x - img.width / 2,
+          y: y - img.height / 2,
+          z: z,
+          col: [r, g, b] // Save color for better detail
+        });
+      }
+    }
+  }
+}
+
+function draw() {
+  background(0);
+
+  if (dragging) {
+    angleY += (mouseX - lastMouseX) * 0.01;
+    angleX += (mouseY - lastMouseY) * 0.01;
+    lastMouseX = mouseX;
+    lastMouseY = mouseY;
+  }
+
+  rotateX(angleX);
+  rotateY(angleY);
+
+  strokeWeight(2);
+  points.forEach(p => {
+    stroke(p.col[0], p.col[1], p.col[2]); // Use original pixel color
+    point(p.x, p.y, p.z);
+  });
+}
+
+function mousePressed() {
+  dragging = true;
+  lastMouseX = mouseX;
+  lastMouseY = mouseY;
+}
+
+function mouseReleased() {
+  dragging = false;
+}
+
+</script>
+</body>
+</html>

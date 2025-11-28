@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="p5.js"></script>
+  <style>
+     body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+
+      /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  
+
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+<script>
+// Complete p5.js sketch with bird animation and puzzle drag/drop
+
+let assets = [
+  { file: "michael/images/base.png",    x: 75,  y: 300, fixed: true },
+  { file: "michael/images/outline.png", x: 80,  y: 148, fixed: true },
+  { file: "michael/images/back.png",    x: 220, y: 160 },
+  { file: "michael/images/left.png",    x: 105, y: 178 },
+  { file: "michael/images/right.png",   x: 200, y: 240 },
+  { file: "michael/images/front.png",   x: 106, y: 226 },
+  { file: "michael/images/roof-l.png",  x: 79,  y: 149 },
+  { file: "michael/images/roof-r.png",  x: 147, y: 149 },
+  { file: "michael/images/stick.png",   x: 119, y: 377 },
+];
+
+let images = [];
+let scaleFactor = 0.8;
+
+let pieces = [];
+let selected = null;
+let offsetX = 0;
+let offsetY = 0;
+const SNAP_TOLERANCE = 30;
+
+// Bird animation variables
+let birdFrames = [];
+let birdFinal;
+let birdScale = 0.8;
+let birdW = 0;
+let birdH = 0;
+
+let birdX = -200;
+let birdY = -200;
+let birdTargetX = 0;
+let birdTargetY = 0;
+let birdFlying = false;
+let birdLanded = false;
+
+let birdFrameIndex = 0;
+let birdAnimCounter = 0;
+let birdAnimSpeed = 6;
+let birdSpeed = 2.2;
+
+function preload() {
+  // Load puzzle piece images
+  for (let i = 0; i < assets.length; i++) {
+    images[i] = loadImage(assets[i].file);
+  }
+
+  // Load bird animation frames bird1.png..bird6.png
+  for (let i = 1; i <= 6; i++) {
+    birdFrames.push(loadImage(`michael/images/bird${i}.png`));
+  }
+
+  // Load final resting bird image
+  birdFinal = loadImage("michael/images/bird-final.png");
+}
+
+function setup() {
+let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+
+  // Initialize puzzle pieces
+  for (let i = 0; i < assets.length; i++) {
+    let img = images[i];
+    let correctX = assets[i].x;
+    let correctY = assets[i].y;
+    let w = img.width * scaleFactor;
+    let h = img.height * scaleFactor;
+
+    let startX = assets[i].fixed ? correctX : random(20, width - w - 20);
+    let startY = assets[i].fixed ? correctY : random(20, height - h - 20);
+
+    pieces.push({
+      img: img,
+      correctX: correctX,
+      correctY: correctY,
+      x: startX,
+      y: startY,
+      w: w,
+      h: h,
+      fixed: assets[i].fixed || false,
+      placed: assets[i].fixed || false
+    });
+  }
+
+  // Bird dimensions
+  let refBird = birdFinal || birdFrames[0];
+  birdW = refBird.width * birdScale;
+  birdH = refBird.height * birdScale;
+
+  // Starting bird offscreen bottom-left
+  birdX = -birdW - 50;
+  birdY = height + birdH + 50;
+
+  // ---- Bird landing point independent of stick piece ----
+  birdTargetX = 105; // horizontal landing position (adjust as needed)
+  birdTargetY = 340; // vertical landing position (adjust as needed)
+}
+
+function draw() {
+  background(0);
+
+  // Draw puzzle pieces
+  for (let i = 0; i < pieces.length; i++) {
+    let p = pieces[i];
+    image(p.img, p.x, p.y, p.w, p.h);
+  }
+
+  // Start bird flying if puzzle completed
+  if (!birdFlying && puzzleCompleted()) {
+    birdFlying = true;
+    birdX = -birdW - 50;
+    birdY = height + birdH + 50;
+    birdFrameIndex = 0;
+    birdAnimCounter = 0;
+    birdLanded = false;
+  }
+
+  // Bird flight & animation
+  if (birdFlying && !birdLanded) {
+    let dx = birdTargetX - birdX;
+    let dy = birdTargetY - birdY;
+    let distanceToTarget = sqrt(dx * dx + dy * dy);
+
+    if (distanceToTarget > 3) {
+      birdX += (dx / distanceToTarget) * birdSpeed;
+      birdY += (dy / distanceToTarget) * birdSpeed;
+
+      birdAnimCounter++;
+      if (birdAnimCounter >= birdAnimSpeed) {
+        birdAnimCounter = 0;
+        birdFrameIndex = (birdFrameIndex + 1) % birdFrames.length;
+      }
+
+      let bf = birdFrames[birdFrameIndex];
+      image(bf, birdX, birdY, bf.width * birdScale, bf.height * birdScale);
+    } else {
+      birdX = birdTargetX;
+      birdY = birdTargetY;
+      birdLanded = true;
+    }
+  }
+
+  // Draw landed bird
+  if (birdLanded) {
+    image(birdFinal, birdX, birdY, birdFinal.width * birdScale, birdFinal.height * birdScale);
+  }
+
+  // Optional: Draw landing point marker for testing
+  // fill(255, 0, 0, 100);
+  // ellipse(birdTargetX + birdW / 2, birdTargetY + birdH / 2, 10, 10);
+}
+
+// Mouse interaction
+function mousePressed() {
+  for (let i = 0; i < pieces.length; i++) {
+    let p = pieces[i];
+    if (!p.fixed && !p.placed) {
+      if (mouseX > p.x && mouseX < p.x + p.w && mouseY > p.y && mouseY < p.y + p.h) {
+        selected = p;
+        offsetX = mouseX - p.x;
+        offsetY = mouseY - p.y;
+        break;
+      }
+    }
+  }
+}
+
+function mouseDragged() {
+  if (selected) {
+    selected.x = mouseX - offsetX;
+    selected.y = mouseY - offsetY;
+  }
+}
+
+function mouseReleased() {
+  if (selected) {
+    if (abs(selected.x - selected.correctX) <= SNAP_TOLERANCE && abs(selected.y - selected.correctY) <= SNAP_TOLERANCE) {
+      selected.x = selected.correctX;
+      selected.y = selected.correctY;
+      selected.placed = true;
+    }
+    selected = null;
+  }
+}
+
+// Check if all moveable pieces are placed
+function puzzleCompleted() {
+  for (let i = 0; i < pieces.length; i++) {
+    let p = pieces[i];
+    if (!p.fixed && !p.placed) return false;
+  }
+  return true;
+}
+
+
+</script>
+</body>
+</html>

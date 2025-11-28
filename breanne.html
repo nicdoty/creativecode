@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="p5.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tiny5&display=swap" rel="stylesheet">
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+      /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+  <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+ 
+  <div class="info-container">
+    <img src="images/info.png" class="info" alt="Info Button">
+    <div class="tooltip">This is the information text that appears on hover!</div>
+  </div>
+
+  </div>
+  
+
+<script>
+let img1, img2; // Tree and branch
+let cats = []; // Array of cat images
+let catObjs = []; // Array of cat objects with position and state
+let platform;
+let score = 0; // Player score
+
+// Image positions
+let img1X = -1, img1Y = 0;
+let img2X = 55, img2Y = 120;
+
+// Image scales
+let img1Scale = 0.1;
+let img2Scale = 0.1;
+let catScale = 0.1; // Scale for cats
+
+function preload() {
+  img1 = loadImage('breanne/images/tree.png');
+  img2 = loadImage('breanne/images/branch.png');
+
+  cats.push(loadImage('breanne/images/cat1.png'));
+  cats.push(loadImage('breanne/images/cat2.png'));
+  cats.push(loadImage('breanne/images/cat3.png'));
+  cats.push(loadImage('breanne/images/cat4.png'));
+}
+
+function setup() {
+  // Create canvas and attach it to the container
+  let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+
+  noStroke();
+  platform = { x: width / 2, y: height - 30, w: 60, h: 15 };
+
+  setInterval(spawnCat, 1000);
+}
+
+function spawnCat() {
+  let catImg = random(cats);
+  let catX = img2X + random(10, 200);
+  let catY = img2Y;
+  let fallDelay = random(500, 3000);
+  catObjs.push({
+    img: catImg,
+    x: catX,
+    y: catY,
+    scale: catScale,
+    falling: false,
+    fallDelay: fallDelay,
+    timer: 0,
+    caught: false
+  });
+}
+
+function draw() {
+  background('lightblue');
+
+  // Draw tree
+  if (img1) {
+    let w1 = img1.width * img1Scale;
+    let h1 = img1.height * img1Scale;
+    image(img1, img1X, img1Y, w1, h1);
+  }
+
+  // Draw branch
+  if (img2) {
+    let w2 = img2.width * img2Scale;
+    let h2 = img2.height * img2Scale;
+    image(img2, img2X, img2Y, w2, h2);
+  }
+
+  // Update and draw cats
+  for (let cat of catObjs) {
+    if (!cat.falling) {
+      cat.timer += deltaTime;
+      if (cat.timer >= cat.fallDelay) cat.falling = true;
+    } else {
+      cat.y += 5; // fall speed
+
+      // Check for collision with platform
+      let catRight = cat.x + cat.img.width * cat.scale;
+      let catBottom = cat.y + cat.img.height * cat.scale;
+      let platformRight = platform.x + platform.w;
+
+      if (catBottom >= platform.y &&
+          cat.x < platformRight &&
+          catRight > platform.x &&
+          !cat.caught) {
+        cat.caught = true;
+        score += 1; // increment score
+      }
+
+      // Remove if cat falls off screen
+      if (cat.y > height) {
+        cat.caught = true;
+      }
+    }
+
+    if (!cat.caught) {
+      let w = cat.img.width * cat.scale;
+      let h = cat.img.height * cat.scale;
+      image(cat.img, cat.x, cat.y, w, h);
+    }
+  }
+
+  // Draw platform
+  platform.x = mouseX - platform.w / 2;
+  fill('white');
+  rect(platform.x, platform.y, platform.w, platform.h);
+
+  // Draw score on top of everything
+  fill('white');       // bright color
+  stroke('black');      // outline
+  strokeWeight(2);
+  textSize(20);
+  textFont("Tiny5");
+  textStyle(BOLD);
+  textAlign(LEFT, TOP);
+  text('Score: ' + score, 10, 10);
+  noStroke();           // reset stroke
+}
+
+
+</script>
+</body>
+</html>

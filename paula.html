@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="p5.js"></script>
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+
+      /* Container for canvas and button */
+  #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+<script>
+let boatImg;
+let island1Img, island2Img, island3Img, island4Img, island5Img, island6Img, island7Img;
+let islands = [];
+let boat;
+let path = [];
+let drawing = false;
+let oceanColor;
+let islandScale = 0.1;
+let boatScale = 0.1;
+
+function preload() {
+boatImg = loadImage('paula/images/boat.png');
+island1Img = loadImage('paula/images/island1.png');
+island2Img = loadImage('paula/images/island2.png');
+island3Img = loadImage('paula/images/island3.png');
+island4Img = loadImage('paula/images/island4.png');
+island5Img = loadImage('paula/images/island5.png');
+island6Img = loadImage('paula/images/island6.png');
+island7Img = loadImage('paula/images/island7.png');
+}
+
+function setup() {
+  let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); 
+oceanColor = color(0, 119, 190);
+
+islands.push({ x: 80, y: 100, img: island1Img, w: island1Img.width * islandScale, h: island1Img.height * islandScale });
+islands.push({ x: 300, y: 100, img: island2Img, w: island2Img.width * islandScale, h: island2Img.height * islandScale });
+islands.push({ x: 100, y: 250, img: island3Img, w: island3Img.width * islandScale, h: island3Img.height * islandScale });
+islands.push({ x: 100, y: 400, img: island4Img, w: island4Img.width * islandScale, h: island4Img.height * islandScale });
+islands.push({ x: 280, y: 500, img: island5Img, w: island5Img.width * islandScale, h: island5Img.height * islandScale });
+islands.push({ x: 300, y: 300, img: island6Img, w: island6Img.width * islandScale, h: island6Img.height * islandScale });
+islands.push({ x: 60, y: 520, img: island7Img, w: island7Img.width * islandScale, h: island7Img.height * islandScale });
+
+noCursor(); // hide default cursor
+}
+
+function draw() {
+background(oceanColor);
+
+imageMode(CENTER);
+for (let isl of islands) {
+image(isl.img, isl.x, isl.y, isl.w, isl.h);
+}
+
+// Draw path line
+if (path.length > 0) {
+stroke(255, 255, 0, 220);
+strokeWeight(4);
+noFill();
+drawingContext.setLineDash([10, 10]);
+beginShape();
+for (let p of path) vertex(p.x, p.y);
+endShape();
+drawingContext.setLineDash([]);
+}
+
+// Update and draw boat
+if (boat) {
+boat.update();
+boat.show();
+}
+
+// Draw custom cursor
+let canDraw = true;
+for (let isl of islands) {
+let dx = mouseX - isl.x;
+let dy = mouseY - isl.y;
+let rx = isl.w / 2;
+let ry = isl.h / 2;
+if ((dx*dx)/(rx*rx) + (dy*dy)/(ry*ry) <= 1) canDraw = false;
+}
+
+noStroke();
+if (canDraw) fill(255, 255, 0, 200);
+else fill(255, 0, 0, 200);
+ellipse(mouseX, mouseY, 15, 15);
+}
+
+function mousePressed() {
+drawing = true;
+path = [];
+path.push(createVector(mouseX, mouseY));
+}
+
+function mouseDragged() {
+if (!drawing) return;
+let pt = createVector(mouseX, mouseY);
+
+for (let isl of islands) {
+let dx = pt.x - isl.x;
+let dy = pt.y - isl.y;
+let rx = isl.w / 2;
+let ry = isl.h / 2;
+if ((dx*dx)/(rx*rx) + (dy*dy)/(ry*ry) <= 1) {
+drawing = false;
+console.log("Cannot draw through island!");
+return;
+}
+}
+
+path.push(pt);
+}
+
+function mouseReleased() {
+drawing = false;
+if (path.length > 1) boat = new Boat(path, boatImg);
+}
+
+class Boat {
+constructor(path, img) {
+this.path = path;
+this.img = img;
+this.t = 0;
+this.speed = 0.002;
+this.forward = true;
+}
+
+update() {
+if (this.forward) {
+this.t += this.speed;
+if (this.t >= 1) { this.t = 1; this.forward = false; }
+} else {
+this.t -= this.speed;
+if (this.t <= 0) { this.t = 0; this.forward = true; }
+}
+}
+
+show() {
+let pos = this.getPos();
+imageMode(CENTER);
+
+
+// Vertical offset to align boat bottom with path  
+let offsetY = -(this.img.height * boatScale) / 2;  
+image(this.img, pos.x, pos.y + offsetY, this.img.width * boatScale, this.img.height * boatScale);  
+
+
+}
+
+getPos() {
+let total = this.path.length - 1;
+let idx = floor(this.t * total);
+let nextIdx = min(idx + 1, total);
+let inter = (this.t * total) - idx;
+let x = lerp(this.path[idx].x, this.path[nextIdx].x, inter);
+let y = lerp(this.path[idx].y, this.path[nextIdx].y, inter);
+return createVector(x, y);
+}
+}
+
+</script>
+</body>
+</html>

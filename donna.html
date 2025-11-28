@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand + Scrolling Grid</title>
+  <script src="p5.js"></script>
+  <style>
+   body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: #282828; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh;
+  }
+    canvas {
+      display: block;
+      margin: 0 auto;
+    }
+     /* Container for canvas and button */
+     #game-container {
+    position: relative;
+    width: 400px;
+    height: 600px;
+  }
+
+  /* Canvas absolutely positioned inside container */
+  #game-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 400px;
+    height: 600px;
+    display: block;
+  }
+
+  /* Back button positioned inside container */
+  .back {
+    position: absolute;
+    top: 560px;
+    left: 10px;
+    width: 30px;
+    cursor: pointer;
+    z-index: 10;
+  }
+
+
+  /* Info button */
+  .info-container {
+    position: absolute;
+    top: 560px;
+    right: 10px;
+    z-index: 10;
+  }
+
+  .info {
+    width: 30px;
+    cursor: pointer;
+  }
+
+  /* Tooltip centered on canvas */
+  .tooltip {
+    visibility: hidden;
+    width: 200px;
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, Helvetica, sans-serif;
+
+    /* Center on container */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .info-container:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    
+    <a href="index.html"> <img src="images/back.png" class="back"  onclick="goBack()"></a>
+   
+    <div class="info-container">
+      <img src="images/info.png" class="info" alt="Info Button">
+      <div class="tooltip">This is the information text that appears on hover!</div>
+    </div>
+  
+    </div>
+
+
+<script>
+let images = [];
+let currentIndex = 0;
+let direction = 1;
+let imgHeight = 350;
+let scrollPos = 0;
+
+// Grid pattern
+let pattern = [
+  "xoxoxoxoxox",
+  "oxoxoooxoxo",
+  "ooxoxoxoxoo",
+  "oxoooxoooxo"
+];
+let cellSize = 20;
+let cols = pattern[0].length;
+let scrollSteps = 0;
+
+// Grid colors
+let colorHoldRows = 12;
+let transitionRows = 4;
+let rainbowSteps = 7;
+
+function preload() {
+  images[0] = loadImage('donna/images/hand2.png');
+  images[1] = loadImage('donna/images/hand3.png');
+}
+
+function setup() {
+  let canvas = createCanvas(400, 600);
+  canvas.parent('game-container');
+  canvas.style('display', 'block'); // ensure it's visible
+  imageMode(CENTER);
+}
+
+function draw() {
+  background(0);
+
+  // Draw the grid first
+  drawGrid();
+
+  // Draw the hand images on top
+  push();
+  translate(width / 2, 0);
+  let img = images[currentIndex];
+  let imgWidth = img.width * (imgHeight / img.height);
+  image(img, 0, 30 + imgHeight / 2, imgWidth, imgHeight);
+  pop();
+}
+
+function drawGrid() {
+  let visibleRows = scrollSteps + 6; // how many rows to show below hands
+  let totalWidth = cols * cellSize;
+  let xOffset = (width - totalWidth) / 2;
+
+  for (let r = 0; r < visibleRows; r++) {
+    let patternIndex = (scrollSteps - r) % pattern.length;
+    if (patternIndex < 0) patternIndex += pattern.length;
+    let rowStr = pattern[patternIndex];
+
+    let bandIndex = Math.floor((scrollSteps - r) / colorHoldRows);
+    let nextBandIndex = bandIndex + 1;
+    let hue1 = (bandIndex * 360 / rainbowSteps) % 360;
+    let hue2 = (nextBandIndex * 360 / rainbowSteps) % 360;
+
+    let rowInBand = (scrollSteps - r) % colorHoldRows;
+    if (rowInBand < 0) rowInBand += colorHoldRows;
+    let t = constrain(rowInBand / transitionRows, 0, 1);
+
+    let delta = ((hue2 - hue1 + 540) % 360) - 180;
+    let hue = (hue1 + delta * t + 360) % 360;
+
+    for (let c = 0; c < cols; c++) {
+      if (rowStr[c] === "x") {
+        let x = xOffset + c * cellSize;
+        let y = 125 + r * cellSize; // grid stays below hand
+        if (y > height) continue;
+        colorMode(HSB, 360, 100, 100);
+        fill(hue, 80, 100);
+        stroke(0);
+        rect(x, y, cellSize, cellSize);
+      }
+    }
+  }
+}
+
+function mouseWheel(event) {
+  scrollPos += event.delta;
+
+  if (scrollPos > 20) {
+    scrollPos = 0;
+    currentIndex += direction;
+
+    if (currentIndex === images.length - 1 || currentIndex === 0) {
+      direction *= -1;
+    }
+
+    scrollSteps++; // advance grid rows along with hand ping-pong
+  }
+  return false;
+}
+</script>
+</body>
+</html>
